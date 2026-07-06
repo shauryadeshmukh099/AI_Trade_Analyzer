@@ -1,0 +1,12 @@
+{
+  "name": "chartscope",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod"
+  },
+  "devDependencies": {
+    "vercel": "^39.0.0"
+  }
+}
