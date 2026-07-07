@@ -1,25 +1,17 @@
 // api/analyze.js
-// Vercel serverless function — POST /api/analyze
-// Receives a chart image, runs AI analysis, returns structured trade setup JSON.
-// The API key never touches the frontend.
+const { analyzeChart } = require('../lib/analyzeChart');
 
-import { analyzeChart } from '../lib/analyzeChart.js';
-
-// Max image size: 5MB (Vercel free tier body limit is 4.5MB, keep headroom)
 const MAX_SIZE_BYTES = 4 * 1024 * 1024;
 
-export default async function handler(req, res) {
-  // CORS headers — allow requests from any origin (frontend can be local file or any domain)
+module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  // Handle preflight OPTIONS request
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  // Only POST allowed
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -27,7 +19,6 @@ export default async function handler(req, res) {
   try {
     const { image, mediaType } = req.body;
 
-    // ── Validation ──────────────────────────────────────────
     if (!image) {
       return res.status(400).json({ error: 'Missing image field (base64 string expected)' });
     }
@@ -36,7 +27,6 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'image must be a base64 string' });
     }
 
-    // Rough size check on base64 string (base64 is ~33% larger than binary)
     const approxBytes = (image.length * 3) / 4;
     if (approxBytes > MAX_SIZE_BYTES) {
       return res.status(413).json({ error: 'Image too large. Maximum size is 4MB.' });
@@ -45,12 +35,10 @@ export default async function handler(req, res) {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
     const resolvedType = mediaType && allowedTypes.includes(mediaType)
       ? mediaType
-      : 'image/jpeg'; // Default fallback
+      : 'image/jpeg';
 
-    // ── Analysis ────────────────────────────────────────────
     const result = await analyzeChart(image, resolvedType);
 
-    // ── Validate result shape before sending ────────────────
     const validStatuses = ['setup_found', 'no_setup', 'error_no_price_axis'];
     if (!result?.status || !validStatuses.includes(result.status)) {
       console.error('Unexpected AI response shape:', result);
@@ -61,18 +49,14 @@ export default async function handler(req, res) {
 
   } catch (err) {
     console.error('Analysis error:', err.message);
-
-    // Don't leak internal error details to the client
     return res.status(500).json({
       error: 'Analysis failed. Please try again.',
-      // Only include detail in non-production for debugging
       ...(process.env.NODE_ENV !== 'production' && { detail: err.message })
     });
   }
-}
+};
 
-// Vercel config — disable default body size limit since we handle it ourselves
-export const config = {
+module.exports.config = {
   api: {
     bodyParser: {
       sizeLimit: '5mb'
