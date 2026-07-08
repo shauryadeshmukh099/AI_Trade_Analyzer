@@ -17,10 +17,16 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const { image, mediaType } = req.body;
+    // Parse body — handles both application/json and text/plain (to avoid CORS preflight)
+    let body = req.body;
+    if (typeof body === 'string') {
+      try { body = JSON.parse(body); } catch { body = {}; }
+    }
+
+    const { image, mediaType } = body;
 
     if (!image) {
-      return res.status(400).json({ error: 'Missing image field (base64 string expected)' });
+      return res.status(400).json({ error: 'Missing image field' });
     }
 
     if (typeof image !== 'string') {
@@ -33,15 +39,12 @@ module.exports = async function handler(req, res) {
     }
 
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-    const resolvedType = mediaType && allowedTypes.includes(mediaType)
-      ? mediaType
-      : 'image/jpeg';
+    const resolvedType = mediaType && allowedTypes.includes(mediaType) ? mediaType : 'image/jpeg';
 
     const result = await analyzeChart(image, resolvedType);
 
     const validStatuses = ['setup_found', 'no_setup', 'error_no_price_axis'];
     if (!result?.status || !validStatuses.includes(result.status)) {
-      console.error('Unexpected AI response shape:', result);
       return res.status(502).json({ error: 'Unexpected response from analysis model' });
     }
 
